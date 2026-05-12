@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PRP Token/Session PoC{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+    /* Profile banner */
+    #profile-banner {
+      padding: 6px 16px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+    #profile-banner.insecure { background: #e63946; color: #fff; }
+    #profile-banner.secure   { background: #2d6a4f; color: #fff; }
+
+    nav {
+      background: #1a1a2e;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    nav a { color: #e0e0e0; text-decoration: none; font-size: 0.9rem; }
+    nav a:hover { color: #fff; }
+    nav .brand { font-weight: 700; color: #fff; font-size: 1rem; }
+
+    .container { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 28px 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      margin-bottom: 20px;
+    }
+    h1, h2 { margin-bottom: 16px; }
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.1rem; color: #444; }
+
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+    input[type=text], input[type=password], textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid #ccc;
+      border-radius: 4px; font-size: 0.9rem; margin-bottom: 12px;
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    button, .btn {
+      display: inline-block; padding: 8px 20px;
+      background: #1a1a2e; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+      text-decoration: none;
+    }
+    button:hover, .btn:hover { background: #2e2e5e; }
+    .btn-danger { background: #e63946; }
+    .btn-danger:hover { background: #c1121f; }
+    .btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+
+    .error { color: #c1121f; font-size: 0.85rem; margin-bottom: 10px; }
+    .info  { color: #555; font-size: 0.82rem; margin-top: 4px; }
+
+    .vuln-badge {
+      display: inline-block; background: #e63946; color: #fff;
+      font-size: 0.7rem; font-weight: 700; padding: 2px 6px;
+      border-radius: 3px; letter-spacing: 0.05em; vertical-align: middle;
+    }
+    .secure-badge {
+      display: inline-block; background: #2d6a4f; color: #fff;
+      font-size: 0.7rem; font-weight: 700; padding: 2px 6px;
+      border-radius: 3px; letter-spacing: 0.05em; vertical-align: middle;
+    }
+
+    code, pre {
+      background: #f4f4f4; border-radius: 3px;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 0.82rem;
+    }
+    code { padding: 1px 5px; }
+    pre  { padding: 10px 14px; overflow-x: auto; }
+
+    .note-card {
+      border-left: 3px solid #e63946;
+      padding: 8px 12px;
+      background: #fff8f8;
+      margin-bottom: 8px;
+      border-radius: 0 4px 4px 0;
+    }
+    .note-meta { font-size: 0.75rem; color: #888; margin-top: 4px; }
+
+    /* JWT panel */
+    #jwt-panel { font-size: 0.82rem; }
+    #jwt-panel pre { max-height: 200px; overflow-y: auto; word-break: break-all; }
+    #token-display { word-break: break-all; background: #f4f4f4; padding: 8px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- Profile banner makes the active mode immediately obvious during demos -->
+{% set profile = profile | default('INSECURE') %}
+<div id="profile-banner" class="{{ 'insecure' if profile == 'INSECURE' else 'secure' }}">
+  Active profile: {{ profile }}
+  {% if profile == 'INSECURE' %}
+    — Cookie flags missing | Session fixation enabled | JWT in localStorage | No token revocation
+  {% else %}
+    — Secure cookie flags | Session regeneration | In-memory JWT | Server-side revocation
+  {% endif %}
+</div>
+
+<nav>
+  <span class="brand">PRP Token/Session PoC</span>
+  {% if session.get('user_id') %}
+    <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('main.logout') }}">Logout</a>
+  {% else %}
+    <a href="{{ url_for('main.login_page') }}">Login</a>
+    <a href="{{ url_for('main.register') }}">Register</a>
+  {% endif %}
+</nav>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+</body>
+</html>

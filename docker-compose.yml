@@ -1,0 +1,47 @@
+# Isolated private network — all attack traffic stays on the host.
+# No traffic leaves the bridge network.
+networks:
+  prp-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+services:
+
+  # ── Vulnerable application ─────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prp-app
+    environment:
+      - PROFILE=INSECURE          # change to SECURE for the hardened variant
+      - SECRET_KEY=demo-secret-prp
+      - JWT_SECRET=demo-jwt-secret-prp
+    ports:
+      - "5000:5000"               # http://localhost:5000
+    networks:
+      prp-net:
+        ipv4_address: 172.28.0.10
+    volumes:
+      - ./app:/app/app            # live-reload friendly
+    restart: unless-stopped
+
+  # ── Attacker container ─────────────────────────────────────────────────────
+  # Runs the token-collection server for S3.
+  # The /attacker directory is mounted so scripts can be edited without rebuild.
+  attacker:
+    image: python:3.11-slim
+    container_name: prp-attacker
+    working_dir: /attacker
+    volumes:
+      - ./attacker:/attacker
+      - ./evidence:/evidence
+    command: python -u steal_token_server.py --port 8888 --log /evidence/S3/tokens.log
+    ports:
+      - "8888:8888"               # attacker exfil server reachable from host browser
+    networks:
+      prp-net:
+        ipv4_address: 172.28.0.20
+    restart: unless-stopped

