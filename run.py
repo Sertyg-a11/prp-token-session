@@ -10,6 +10,7 @@ Usage
 """
 
 import argparse
+import os
 
 from app import create_app
 
@@ -31,7 +32,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    profile = "SECURE" if args.secure else "INSECURE"
+    # Resolve profile: --secure flag wins, otherwise honour the PROFILE env var
+    # (set by docker-compose), otherwise default to INSECURE.
+    if args.secure:
+        profile = "SECURE"
+    else:
+        profile = os.environ.get("PROFILE", "INSECURE").upper()
     app = create_app(profile=profile)
 
     print(f"\n  PRP PoC starting in [{profile}] profile on http://localhost:{args.port}\n")

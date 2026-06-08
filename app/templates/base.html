@@ -106,7 +106,7 @@
   {% if profile == 'INSECURE' %}
     — Cookie flags missing | Session fixation enabled | JWT in localStorage | No token revocation
   {% else %}
-    — Secure cookie flags | Session regeneration | In-memory JWT | Server-side revocation
+    — Secure cookie flags | Session regeneration | JWT in HttpOnly cookie | Server-side revocation
   {% endif %}
 </div>
 

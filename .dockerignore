@@ -1,0 +1,16 @@
+# Keep build context small and images clean
+__pycache__/
+*.pyc
+instance/
+flask_sessions/
+*.db
+*.sqlite
+*.sqlite3
+.git/
+.gitignore
+evidence/
+*.pem
+*.key
+.env
+.env.*
+README.md

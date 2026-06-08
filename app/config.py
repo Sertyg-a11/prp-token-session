@@ -55,8 +55,8 @@ class SecureConfig(BaseConfig):
     # Regenerate session ID on login to prevent fixation
     REGENERATE_SESSION = True
 
-    # JWT held in memory only; refresh via HttpOnly cookie
-    JWT_STORAGE = "memory"
+    # JWT delivered as an HttpOnly cookie — JS can never read it
+    JWT_STORAGE = "httponly_cookie"
 
     # Server-side revocation list checked on every protected request
     JWT_REVOCATION = True

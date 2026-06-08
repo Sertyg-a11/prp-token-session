@@ -38,20 +38,20 @@
       <span class="vuln-badge">S3 — localStorage</span>
       <span class="vuln-badge">S4 — no revocation</span>
     {% else %}
-      <span class="secure-badge">in-memory / HttpOnly cookie</span>
+      <span class="secure-badge">HttpOnly cookie</span>
     {% endif %}
   </h2>
 
-  <button onclick="apiLogin()">API Login (get JWT)</button>
-  <button onclick="callApiMe()" style="margin-left:8px;">Call /api/me</button>
-  <button onclick="apiLogout()" class="btn-danger" style="margin-left:8px;">API Logout</button>
+  <button id="btn-api-login">API Login (get JWT)</button>
+  <button id="btn-api-me" style="margin-left:8px;">Call /api/me</button>
+  <button id="btn-api-logout" class="btn-danger" style="margin-left:8px;">API Logout</button>
 
   <div style="margin-top:14px;">
     <strong>Stored token</strong>
     {% if profile == 'INSECURE' %}
       (<span class="vuln-badge">localStorage</span> — readable by any same-origin script):
     {% else %}
-      (memory variable — not in localStorage):
+      (HttpOnly cookie — not readable from JavaScript):
     {% endif %}
     <div id="token-display" style="margin-top:6px; color:#888;">— not yet obtained —</div>
   </div>
@@ -119,92 +119,14 @@
   {% endif %}
 </div>
 
-<!-- ── JavaScript ────────────────────────────────────────────────────── -->
-<script>
-  const PROFILE = "{{ profile }}";
+<!-- ── Client config passed via data attributes (no inline script needed) ── -->
+<div id="app-config"
+     data-profile="{{ profile }}"
+     data-jwt-storage="{{ jwt_storage }}"
+     data-username="{{ user.username }}"
+     hidden></div>
 
-  // In-memory token storage for SECURE mode
-  let _memToken = null;
-
-  function storeToken(token) {
-    if (PROFILE === "INSECURE") {
-      // S3: stored in localStorage — any same-origin script can read it
-      localStorage.setItem("jwt", token);
-    } else {
-      // SECURE: stored only in this closure variable, not in any persistent storage
-      _memToken = token;
-    }
-    document.getElementById("token-display").textContent = token;
-  }
-
-  function loadToken() {
-    if (PROFILE === "INSECURE") {
-      return localStorage.getItem("jwt");
-    }
-    return _memToken;
-  }
-
-  function clearToken() {
-    if (PROFILE === "INSECURE") {
-      localStorage.removeItem("jwt");
-    } else {
-      _memToken = null;
-    }
-    document.getElementById("token-display").textContent = "— cleared —";
-  }
-
-  async function apiLogin() {
-    // Re-use the same credentials as the session login for simplicity.
-    // In the PoC the user has already authenticated via the form above.
-    const username = "{{ user.username }}";
-    const password = prompt("Enter your password for the API login:");
-    if (!password) return;
-
-    const resp = await fetch("/api/login", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({username, password}),
-    });
-    const data = await resp.json();
-    if (data.token) {
-      storeToken(data.token);
-      document.getElementById("api-me-output").textContent =
-        "Token obtained (storage: " + data.storage + ")";
-    } else {
-      document.getElementById("api-me-output").textContent = JSON.stringify(data);
-    }
-  }
-
-  async function callApiMe() {
-    const token = loadToken();
-    if (!token) {
-      document.getElementById("api-me-output").textContent = "No token — do API Login first.";
-      return;
-    }
-    const resp = await fetch("/api/me", {
-      headers: {"Authorization": "Bearer " + token},
-    });
-    const data = await resp.json();
-    document.getElementById("api-me-output").textContent =
-      JSON.stringify(data, null, 2) + "\n\nHTTP " + resp.status;
-  }
-
-  async function apiLogout() {
-    const token = loadToken();
-    if (token) {
-      await fetch("/api/logout", {
-        method: "POST",
-        headers: {"Authorization": "Bearer " + token},
-      });
-    }
-    // S4 (INSECURE): server did nothing; token still valid.
-    // Copy the token BEFORE clicking logout to prove it still works afterwards.
-    clearToken();
-    document.getElementById("api-me-output").textContent =
-      PROFILE === "INSECURE"
-        ? "Client-side token cleared.\nS4: The token is still valid on the server — paste it into curl to verify."
-        : "Token revoked server-side. Re-using it will return 401.";
-  }
-</script>
+<!-- External script — served from same origin, so allowed by strict CSP -->
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 
 {% endblock %}

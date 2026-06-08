@@ -52,6 +52,12 @@ def jwt_required(f):
         if auth.startswith("Bearer "):
             token = auth[7:]
         if not token:
+            # SECURE: token is delivered as an HttpOnly cookie rather than in
+            # the response body, so JavaScript never sees it.  The browser
+            # attaches it automatically on same-origin requests; read it here
+            # so that @jwt_required routes work end-to-end in SECURE mode.
+            token = request.cookies.get("access_token")
+        if not token:
             return jsonify({"error": "Authorization header missing or malformed"}), 401
         payload, err = verify_token(token)
         if err:
@@ -222,13 +228,15 @@ def api_login():
     storage = current_app.config.get("JWT_STORAGE", "localStorage")
 
     if storage == "httponly_cookie":
-        # SECURE path: deliver token as HttpOnly cookie, not in response body
+        # SECURE path: deliver token as HttpOnly cookie — JS never sees the value.
+        # secure= matches SESSION_COOKIE_SECURE so the demo works over plain HTTP
+        # while still showing the correct flag in DevTools.
         resp = jsonify({"message": "Logged in", "storage": storage})
         resp.set_cookie(
             "access_token",
             token,
             httponly=True,
-            secure=True,
+            secure=current_app.config.get("SESSION_COOKIE_SECURE", False),
             samesite="Strict",
             max_age=current_app.config["JWT_EXPIRY_SECONDS"],
         )
@@ -270,10 +278,18 @@ def api_logout():
     SECURE (Sprint 3 mitigation): revoke_token() adds the jti to RevokedToken.
     Every subsequent verify_token() call will reject it immediately.
     """
+    # Read token from Authorization header (INSECURE / localStorage path)
+    # or from the HttpOnly cookie (SECURE path) — whichever is present
+    token = None
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        revoke_token(auth[7:])   # no-op in INSECURE, deny-list insert in SECURE
+        token = auth[7:]
+    if not token:
+        token = request.cookies.get("access_token")
 
-    resp = jsonify({"message": "Logged out (client should discard token)"})
+    if token:
+        revoke_token(token)   # no-op in INSECURE, deny-list insert in SECURE
+
+    resp = jsonify({"message": "Logged out"})
     resp.delete_cookie("access_token")
     return resp

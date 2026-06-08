@@ -28,6 +28,28 @@ services:
       - ./app:/app/app            # live-reload friendly
     restart: unless-stopped
 
+  # ── Hardened application (SECURE profile) ───────────────────────────────────
+  # Same image, same code — only the config profile differs.
+  # Runs side-by-side with the vulnerable app for the Sprint 3 comparison.
+  app-secure:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prp-app-secure
+    environment:
+      - PROFILE=SECURE
+      - SECRET_KEY=demo-secret-prp
+      - JWT_SECRET=demo-jwt-secret-prp
+    command: python run.py --secure   # explicit SECURE profile
+    ports:
+      - "5001:5000"               # http://localhost:5001
+    networks:
+      prp-net:
+        ipv4_address: 172.28.0.11
+    volumes:
+      - ./app:/app/app
+    restart: unless-stopped
+
   # ── Attacker container ─────────────────────────────────────────────────────
   # Runs the token-collection server for S3.
   # The /attacker directory is mounted so scripts can be edited without rebuild.

@@ -17,18 +17,6 @@ flask_sessions/
 *.sqlite
 *.sqlite3
 
-# Evidence files — screenshots and captures are large; keep the folder structure only
-evidence/**/*.png
-evidence/**/*.pcap
-evidence/**/*.log
-evidence/**/*.txt
-evidence/**/*.json
-# Keep the empty folders so git tracks the structure
-!evidence/S1/.gitkeep
-!evidence/S2/.gitkeep
-!evidence/S3/.gitkeep
-!evidence/S4/.gitkeep
-
 # Environment / secrets
 .env
 .env.*
